@@ -58,6 +58,18 @@ export class ActionTaskRepository extends BaseRepository {
   }
 
   /**
+   * Get PII location name for activity logging
+   */
+  private async getPiiLocationName(piiLocationId: string): Promise<string | undefined> {
+    const { data } = await this.supabase
+      .from(this.tableName('pii_locations'))
+      .select('name')
+      .eq('id', piiLocationId)
+      .single();
+    return data?.name;
+  }
+
+  /**
    * Create a new action task
    */
   async create(input: CreateActionTaskInput): Promise<ActionTask> {
@@ -84,7 +96,25 @@ export class ActionTaskRepository extends BaseRepository {
       this.handleError(error, 'create action task');
     }
 
-    return this.mapToActionTask(data);
+    const task = this.mapToActionTask(data);
+
+    // Log activity
+    const locationName = await this.getPiiLocationName(input.piiLocationId);
+    await this.logActivity({
+      dsrRequestId: input.dsrRequestId,
+      actionTaskId: task.id,
+      piiLocationName: locationName,
+      activityType: 'task_created',
+      description: `Task created for ${locationName ?? 'unknown location'}`,
+      actorType: 'system',
+      newStatus: task.status,
+      details: {
+        taskType: input.taskType,
+        piiLocationId: input.piiLocationId,
+      },
+    });
+
+    return task;
   }
 
   /**
@@ -281,7 +311,7 @@ export class ActionTaskRepository extends BaseRepository {
     // Get all active PII locations that support this request type
     const { data: locations, error: locError } = await this.supabase
       .from(this.tableName('pii_locations'))
-      .select('id, execution_type')
+      .select('id, name, execution_type')
       .eq('is_active', true)
       .contains('supported_request_types', [requestType])
       .order('priority_order', { ascending: true });
@@ -312,13 +342,41 @@ export class ActionTaskRepository extends BaseRepository {
       this.handleError(error, 'create action tasks for request');
     }
 
-    return (createdTasks || []).map((row) => this.mapToActionTask(row));
+    const mappedTasks = (createdTasks || []).map((row) => this.mapToActionTask(row));
+
+    // Log activity for each created task
+    const locationMap = new Map(locations.map((loc) => [loc.id, loc.name]));
+    for (const task of mappedTasks) {
+      const locationName = locationMap.get(task.piiLocationId);
+      await this.logActivity({
+        dsrRequestId,
+        actionTaskId: task.id,
+        piiLocationName: locationName,
+        activityType: 'task_created',
+        description: `Task created for ${locationName ?? 'unknown location'}`,
+        actorType: 'system',
+        newStatus: task.status,
+        details: {
+          taskType: requestType,
+          piiLocationId: task.piiLocationId,
+          batchCreation: true,
+          totalTasks: mappedTasks.length,
+        },
+      });
+    }
+
+    return mappedTasks;
   }
 
   /**
    * Start a task (mark as in_progress)
    */
   async startTask(id: string, assignedTo?: string): Promise<ActionTask> {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw new NotFoundError('Action Task', id);
+    }
+
     const updates: UpdateActionTaskInput = {
       status: 'in_progress',
     };
@@ -337,26 +395,68 @@ export class ActionTaskRepository extends BaseRepository {
       })
       .eq('id', id);
 
-    return this.update(id, updates);
+    const task = await this.update(id, updates);
+
+    // Log activity
+    const locationName = await this.getPiiLocationName(task.piiLocationId);
+    await this.logActivity({
+      dsrRequestId: task.dsrRequestId,
+      actionTaskId: task.id,
+      piiLocationName: locationName,
+      activityType: 'task_started',
+      description: `Started processing ${locationName ?? 'unknown location'}`,
+      actorType: assignedTo ? 'user' : 'system',
+      actorId: assignedTo,
+      previousStatus: existing.status,
+      newStatus: 'in_progress',
+      details: {
+        attemptCount: task.attemptCount,
+      },
+    });
+
+    return task;
   }
 
   /**
    * Complete a task successfully
    */
   async completeTask(id: string, input: CompleteActionTaskInput): Promise<ActionTask> {
-    return this.update(id, {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw new NotFoundError('Action Task', id);
+    }
+
+    const task = await this.update(id, {
       status: 'completed',
       executionResult: input.result,
       notes: input.notes,
     });
+
+    // Log activity
+    const locationName = await this.getPiiLocationName(task.piiLocationId);
+    await this.logActivity({
+      dsrRequestId: task.dsrRequestId,
+      actionTaskId: task.id,
+      piiLocationName: locationName,
+      activityType: 'task_completed',
+      description: `Completed ${locationName ?? 'unknown location'}: ${input.result?.recordsAffected ?? 0} records affected`,
+      actorType: 'user',
+      previousStatus: existing.status,
+      newStatus: 'completed',
+      details: {
+        result: input.result,
+      },
+    });
+
+    return task;
   }
 
   /**
    * Mark a task as failed
    */
   async failTask(id: string, input: FailActionTaskInput): Promise<ActionTask> {
-    const task = await this.findById(id);
-    if (!task) {
+    const existing = await this.findById(id);
+    if (!existing) {
       throw new NotFoundError('Action Task', id);
     }
 
@@ -367,25 +467,69 @@ export class ActionTaskRepository extends BaseRepository {
     };
 
     // Schedule retry if requested and attempts remaining
-    if (input.scheduleRetry && task.attemptCount < task.maxAttempts) {
+    if (input.scheduleRetry && existing.attemptCount < existing.maxAttempts) {
       // Exponential backoff: 1min, 2min, 4min, etc.
-      const delayMinutes = Math.pow(2, task.attemptCount);
+      const delayMinutes = Math.pow(2, existing.attemptCount);
       const nextRetry = new Date();
       nextRetry.setMinutes(nextRetry.getMinutes() + delayMinutes);
       updates.nextRetryAt = nextRetry;
     }
 
-    return this.update(id, updates);
+    const task = await this.update(id, updates);
+
+    // Log activity
+    const locationName = await this.getPiiLocationName(task.piiLocationId);
+    await this.logActivity({
+      dsrRequestId: task.dsrRequestId,
+      actionTaskId: task.id,
+      piiLocationName: locationName,
+      activityType: 'task_failed',
+      description: `Failed to process ${locationName ?? 'unknown location'}: ${input.errorMessage}`,
+      actorType: 'system',
+      previousStatus: existing.status,
+      newStatus: 'failed',
+      details: {
+        errorMessage: input.errorMessage,
+        attemptCount: task.attemptCount,
+        willRetry: input.scheduleRetry && existing.attemptCount < existing.maxAttempts,
+        nextRetryAt: updates.nextRetryAt?.toISOString(),
+      },
+    });
+
+    return task;
   }
 
   /**
    * Skip a task (mark as not applicable)
    */
   async skipTask(id: string, reason: string): Promise<ActionTask> {
-    return this.update(id, {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw new NotFoundError('Action Task', id);
+    }
+
+    const task = await this.update(id, {
       status: 'skipped',
       notes: reason,
     });
+
+    // Log activity
+    const locationName = await this.getPiiLocationName(task.piiLocationId);
+    await this.logActivity({
+      dsrRequestId: task.dsrRequestId,
+      actionTaskId: task.id,
+      piiLocationName: locationName,
+      activityType: 'task_skipped',
+      description: `Skipped ${locationName ?? 'unknown location'}: ${reason}`,
+      actorType: 'user',
+      previousStatus: existing.status,
+      newStatus: 'skipped',
+      details: {
+        reason,
+      },
+    });
+
+    return task;
   }
 
   /**

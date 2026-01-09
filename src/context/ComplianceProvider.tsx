@@ -3,11 +3,13 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ComplianceConfig, ComplianceFeatures, ComplianceClassNames } from '../types/config';
+import { ActivityRepository } from '../repositories/activity-repository';
 import { AuditLogRepository } from '../repositories/audit-log-repository';
 import { ConsentRecordRepository } from '../repositories/consent-repository';
 import { DataSubjectRequestRepository } from '../repositories/dsr-repository';
 import { PIILocationRepository } from '../repositories/pii-location-repository';
 import { ActionTaskRepository } from '../repositories/action-task-repository';
+import type { ActivityLogger } from '../repositories/base-repository';
 
 /**
  * Context value containing config and repositories
@@ -15,6 +17,7 @@ import { ActionTaskRepository } from '../repositories/action-task-repository';
 interface ComplianceContextValue {
   config: ComplianceConfig;
   repositories: {
+    activity: ActivityRepository;
     auditLog: AuditLogRepository;
     consent: ConsentRecordRepository;
     dsr: DataSubjectRequestRepository;
@@ -72,14 +75,38 @@ export function ComplianceProvider({ config, children }: ComplianceProviderProps
     const tablePrefix = config.tablePrefix ?? 'compliance_';
     const repoConfig = { tablePrefix };
 
+    // Create activity repository first as other repos will use it for logging
+    const activityRepo = new ActivityRepository(config.supabase, config.tenantId, repoConfig);
+
+    // Create activity logger callback that other repositories will use
+    const activityLogger: ActivityLogger = async (input) => {
+      await activityRepo.log({
+        dsrRequestId: input.dsrRequestId,
+        actionTaskId: input.actionTaskId,
+        piiLocationName: input.piiLocationName,
+        activityType: input.activityType as Parameters<typeof activityRepo.log>[0]['activityType'],
+        description: input.description,
+        actorType: input.actorType,
+        actorId: input.actorId,
+        actorName: input.actorName,
+        previousStatus: input.previousStatus,
+        newStatus: input.newStatus,
+        details: input.details,
+      });
+    };
+
+    // Config for repositories that need activity logging
+    const repoConfigWithLogging = { tablePrefix, activityLogger };
+
     return {
       config,
       repositories: {
+        activity: activityRepo,
         auditLog: new AuditLogRepository(config.supabase, config.tenantId, repoConfig),
         consent: new ConsentRecordRepository(config.supabase, config.tenantId, repoConfig),
-        dsr: new DataSubjectRequestRepository(config.supabase, config.tenantId, repoConfig),
+        dsr: new DataSubjectRequestRepository(config.supabase, config.tenantId, repoConfigWithLogging),
         piiLocations: new PIILocationRepository(config.supabase, config.tenantId, repoConfig),
-        actionTasks: new ActionTaskRepository(config.supabase, config.tenantId, repoConfig),
+        actionTasks: new ActionTaskRepository(config.supabase, config.tenantId, repoConfigWithLogging),
       },
       features: {
         ...DEFAULT_FEATURES,

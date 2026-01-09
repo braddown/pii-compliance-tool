@@ -49,10 +49,31 @@ export class ValidationError extends Error {
 }
 
 /**
+ * Activity logger callback type
+ */
+export interface ActivityLogInput {
+  dsrRequestId: string;
+  actionTaskId?: string;
+  piiLocationName?: string;
+  activityType: string;
+  description: string;
+  actorType: 'user' | 'system' | 'automation';
+  actorId?: string;
+  actorName?: string;
+  previousStatus?: string;
+  newStatus?: string;
+  details?: Record<string, unknown>;
+}
+
+export type ActivityLogger = (input: ActivityLogInput) => Promise<void>;
+
+/**
  * Base repository configuration
  */
 export interface BaseRepositoryConfig {
   tablePrefix?: string;
+  /** Optional activity logger for automatic activity tracking */
+  activityLogger?: ActivityLogger;
 }
 
 /**
@@ -62,6 +83,7 @@ export abstract class BaseRepository {
   protected readonly supabase: SupabaseClient;
   protected readonly tenantId: string;
   protected readonly tablePrefix: string;
+  protected readonly activityLogger?: ActivityLogger;
 
   constructor(
     supabase: SupabaseClient,
@@ -71,6 +93,20 @@ export abstract class BaseRepository {
     this.supabase = supabase;
     this.tenantId = tenantId;
     this.tablePrefix = config.tablePrefix ?? 'compliance_';
+    this.activityLogger = config.activityLogger;
+  }
+
+  /**
+   * Log an activity if activity logger is configured
+   * Silently fails to avoid breaking main operations
+   */
+  protected async logActivity(input: ActivityLogInput): Promise<void> {
+    if (!this.activityLogger) return;
+    try {
+      await this.activityLogger(input);
+    } catch (err) {
+      console.error('[BaseRepository] Activity logging failed:', err);
+    }
   }
 
   /**

@@ -1,3 +1,5 @@
+export { useActivity } from './useActivity';
+export type { UseActivityOptions, UseActivityReturn } from './useActivity';
 export { useAuditLogs } from './useAuditLogs';
 export { useDataSubjectRequests, useGDPRRequests } from './useDataSubjectRequests';
 export type { UseDataSubjectRequestsOptions, UseDataSubjectRequestsReturn, UseGDPRRequestsOptions, UseGDPRRequestsReturn } from './useDataSubjectRequests';

@@ -88,7 +88,23 @@ export class DataSubjectRequestRepository extends BaseRepository {
       this.handleError(error, 'create data subject request');
     }
 
-    return this.mapToDataSubjectRequest(data);
+    const dsr = this.mapToDataSubjectRequest(data);
+
+    // Log activity
+    await this.logActivity({
+      dsrRequestId: dsr.id,
+      activityType: 'request_created',
+      description: `${input.requestType} request created for ${input.requesterEmail}`,
+      actorType: 'system',
+      newStatus: 'pending',
+      details: {
+        requestType: input.requestType,
+        priority: input.priority ?? 'medium',
+        dueDate: dueDate.toISOString(),
+      },
+    });
+
+    return dsr;
   }
 
   /**
@@ -96,6 +112,12 @@ export class DataSubjectRequestRepository extends BaseRepository {
    */
   async update(id: string, input: UpdateDSRInput): Promise<DataSubjectRequest> {
     await this.setTenantContext();
+
+    // Get existing request for comparison and activity logging
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw new NotFoundError('Data Subject Request', id);
+    }
 
     const updates: Record<string, unknown> = {};
 
@@ -128,10 +150,7 @@ export class DataSubjectRequestRepository extends BaseRepository {
 
     if (input.metadata !== undefined) {
       // Merge metadata rather than replace
-      const existing = await this.findById(id);
-      if (existing) {
-        updates.metadata = { ...existing.metadata, ...input.metadata };
-      }
+      updates.metadata = { ...existing.metadata, ...input.metadata };
     }
 
     const { data, error } = await this.supabase
@@ -148,7 +167,87 @@ export class DataSubjectRequestRepository extends BaseRepository {
       this.handleError(error, 'update data subject request');
     }
 
-    return this.mapToDataSubjectRequest(data);
+    const updatedDsr = this.mapToDataSubjectRequest(data);
+
+    // Log activity for significant changes
+    await this.logUpdateActivities(existing, updatedDsr, input);
+
+    return updatedDsr;
+  }
+
+  /**
+   * Log activities for DSR updates
+   */
+  private async logUpdateActivities(
+    existing: DataSubjectRequest,
+    updated: DataSubjectRequest,
+    input: UpdateDSRInput
+  ): Promise<void> {
+    // Log status changes
+    if (input.status !== undefined && input.status !== existing.status) {
+      let activityType: string;
+      let description: string;
+
+      switch (input.status) {
+        case 'in_progress':
+          activityType = 'request_status_changed';
+          description = 'Request moved to in progress';
+          break;
+        case 'review':
+          activityType = 'request_status_changed';
+          description = 'Request moved to review';
+          break;
+        case 'completed':
+          activityType = 'request_completed';
+          description = 'Request completed successfully';
+          break;
+        case 'rejected':
+          activityType = 'request_rejected';
+          description = 'Request rejected';
+          break;
+        default:
+          activityType = 'request_status_changed';
+          description = `Request status changed to ${input.status}`;
+      }
+
+      await this.logActivity({
+        dsrRequestId: updated.id,
+        activityType,
+        description,
+        actorType: 'user',
+        previousStatus: existing.status,
+        newStatus: input.status,
+      });
+    }
+
+    // Log verification
+    if (input.verifiedAt !== undefined && !existing.verifiedAt) {
+      await this.logActivity({
+        dsrRequestId: updated.id,
+        activityType: 'request_verified',
+        description: `Request verified via ${input.verificationMethod ?? 'manual verification'}`,
+        actorType: 'user',
+        details: {
+          verificationMethod: input.verificationMethod,
+        },
+      });
+    }
+
+    // Log assignment
+    if (input.assignedTo !== undefined && input.assignedTo !== existing.assignedTo) {
+      await this.logActivity({
+        dsrRequestId: updated.id,
+        activityType: 'request_assigned',
+        description: input.assignedTo
+          ? `Request assigned to ${input.assignedTo}`
+          : 'Request unassigned',
+        actorType: 'user',
+        details: {
+          previousAssignee: existing.assignedTo,
+          newAssignee: input.assignedTo,
+        },
+      });
+    }
   }
 
   /**
@@ -323,9 +422,34 @@ export class DataSubjectRequestRepository extends BaseRepository {
       author,
     });
 
-    return this.update(id, {
-      metadata: { processingNotes },
+    // Use direct supabase update to avoid double-logging from update()
+    await this.setTenantContext();
+    const { data, error } = await this.supabase
+      .from(this.tableName('data_subject_requests'))
+      .update({
+        metadata: { ...existing.metadata, processingNotes },
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      this.handleError(error, 'add note to data subject request');
+    }
+
+    // Log note activity
+    await this.logActivity({
+      dsrRequestId: id,
+      activityType: 'note_added',
+      description: `Note added by ${author}`,
+      actorType: 'user',
+      actorName: author,
+      details: {
+        notePreview: note.substring(0, 100) + (note.length > 100 ? '...' : ''),
+      },
     });
+
+    return this.mapToDataSubjectRequest(data);
   }
 
   /**

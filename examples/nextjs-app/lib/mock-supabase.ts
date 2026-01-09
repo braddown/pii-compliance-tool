@@ -538,6 +538,90 @@ const seedConsentRecords = [
  * Shared mutable data store - singleton that persists across all API route instances
  * Uses globalThis to ensure the same store is used across hot reloads in development
  */
+// Seed request activities
+const seedRequestActivities = [
+  {
+    id: uuid(),
+    tenant_id: TENANT_ID,
+    dsr_request_id: seedGdprRequests[0].id,
+    action_task_id: null,
+    pii_location_name: null,
+    activity_type: 'request_created',
+    description: 'Access request submitted for customer data',
+    actor_type: 'user',
+    actor_id: USER_IDS[0],
+    actor_name: 'john.smith@example.com',
+    previous_status: null,
+    new_status: 'pending',
+    details: { requestType: 'access' },
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+  },
+  {
+    id: uuid(),
+    tenant_id: TENANT_ID,
+    dsr_request_id: seedGdprRequests[0].id,
+    action_task_id: null,
+    pii_location_name: null,
+    activity_type: 'request_status_changed',
+    description: 'Request moved to in progress',
+    actor_type: 'user',
+    actor_id: USER_IDS[1],
+    actor_name: 'jane.doe@example.com',
+    previous_status: 'pending',
+    new_status: 'in_progress',
+    details: {},
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 6).toISOString(),
+  },
+  {
+    id: uuid(),
+    tenant_id: TENANT_ID,
+    dsr_request_id: seedGdprRequests[1].id,
+    action_task_id: null,
+    pii_location_name: null,
+    activity_type: 'request_created',
+    description: 'Erasure request submitted - right to be forgotten',
+    actor_type: 'system',
+    actor_id: null,
+    actor_name: null,
+    previous_status: null,
+    new_status: 'pending',
+    details: { requestType: 'erasure', source: 'public_api' },
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+  },
+  {
+    id: uuid(),
+    tenant_id: TENANT_ID,
+    dsr_request_id: seedGdprRequests[1].id,
+    action_task_id: seedActionTasks[0]?.id,
+    pii_location_name: 'PostgreSQL Users DB',
+    activity_type: 'task_completed',
+    description: 'User data deleted from primary database',
+    actor_type: 'automation',
+    actor_id: null,
+    actor_name: null,
+    previous_status: 'in_progress',
+    new_status: 'completed',
+    details: { recordsAffected: 1, executionTimeMs: 245 },
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
+  },
+  {
+    id: uuid(),
+    tenant_id: TENANT_ID,
+    dsr_request_id: seedGdprRequests[1].id,
+    action_task_id: seedActionTasks[1]?.id,
+    pii_location_name: 'Salesforce CRM',
+    activity_type: 'task_started',
+    description: 'Manual deletion task assigned to sales-ops@example.com',
+    actor_type: 'user',
+    actor_id: USER_IDS[0],
+    actor_name: 'john.smith@example.com',
+    previous_status: 'pending',
+    new_status: 'in_progress',
+    details: {},
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+  },
+];
+
 const globalStore = globalThis as unknown as {
   __mockDataStore?: {
     audit_logs: Record<string, unknown>[];
@@ -545,6 +629,7 @@ const globalStore = globalThis as unknown as {
     consent_records: Record<string, unknown>[];
     pii_locations: Record<string, unknown>[];
     action_tasks: Record<string, unknown>[];
+    request_activities: Record<string, unknown>[];
   };
 };
 
@@ -555,13 +640,16 @@ if (!globalStore.__mockDataStore) {
     consent_records: [...seedConsentRecords],
     pii_locations: [...seedPiiLocations],
     action_tasks: [...seedActionTasks],
+    request_activities: [...seedRequestActivities],
   };
 }
 
 const dataStore = globalStore.__mockDataStore;
 
 function getTableData(tableName: string): Record<string, unknown>[] {
-  if (tableName.includes('audit_log')) {
+  if (tableName.includes('request_activit')) {
+    return dataStore.request_activities;
+  } else if (tableName.includes('audit_log')) {
     return dataStore.audit_logs;
   } else if (tableName.includes('data_subject_request')) {
     return dataStore.data_subject_requests;

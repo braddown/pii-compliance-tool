@@ -5,8 +5,7 @@ import { useComplianceFeatures } from '../context/ComplianceProvider';
 import {
   useComplianceMetrics,
   useDataSubjectRequests,
-  useAuditLogs,
-  useConsent,
+  useActivity,
   usePIILocations,
   useActionTasks,
 } from '../hooks';
@@ -18,7 +17,7 @@ export interface ComplianceDashboardProps {
   /** CSS class name for the container */
   className?: string;
   /** Default active tab */
-  defaultTab?: 'overview' | 'dsr' | 'data-registry' | 'audit' | 'consent' | 'reports' | 'privacy';
+  defaultTab?: 'overview' | 'dsr' | 'data-registry' | 'activity' | 'reports';
   /** Custom tab renderer */
   renderTab?: (tab: string, content: React.ReactNode) => React.ReactNode;
 }
@@ -53,10 +52,8 @@ export function ComplianceDashboard({
     { id: 'overview', label: 'Overview', enabled: true },
     { id: 'dsr', label: 'Data Subject Requests', enabled: features.gdprRequests },
     { id: 'data-registry', label: 'Data Registry', enabled: features.gdprRequests },
-    { id: 'audit', label: 'Audit Logs', enabled: features.auditLogs },
-    { id: 'consent', label: 'Consent', enabled: features.consentManagement },
+    { id: 'activity', label: 'Activity', enabled: features.auditLogs },
     { id: 'reports', label: 'Reports', enabled: features.reports },
-    { id: 'privacy', label: 'Privacy', enabled: features.privacyDashboard },
   ].filter((tab) => tab.enabled);
 
   return (
@@ -81,10 +78,8 @@ export function ComplianceDashboard({
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'dsr' && <DataSubjectRequestsTab />}
         {activeTab === 'data-registry' && <DataRegistryTab />}
-        {activeTab === 'audit' && <AuditTab />}
-        {activeTab === 'consent' && <ConsentTab />}
+        {activeTab === 'activity' && <ActivityTab />}
         {activeTab === 'reports' && <ReportsTab />}
-        {activeTab === 'privacy' && <PrivacyTab />}
       </div>
 
       {/* Basic styles */}
@@ -337,11 +332,8 @@ function OverviewTab() {
           <div className="metric-value">{metrics.gdprRequests.complianceRate}%</div>
         </div>
         <div className="metric-card">
-          <div className="metric-label">Consent Rate</div>
-          <div className="metric-value">{metrics.consent.consentRate}%</div>
-          <div className="metric-label">
-            {metrics.consent.totalActive} active consents
-          </div>
+          <div className="metric-label">Avg Response Time</div>
+          <div className="metric-value">{metrics.gdprRequests.avgResponseDays} days</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Audit Events Today</div>
@@ -575,92 +567,132 @@ function NewRequestModal({
   );
 }
 
-function AuditTab() {
-  const { logs, loading, error, total } = useAuditLogs({ pageSize: 20 });
+function ActivityTab() {
+  const { activities, loading, error, total } = useActivity({ pageSize: 50 });
 
-  if (loading) return <div className="loading">Loading audit logs...</div>;
+  if (loading) return <div className="loading">Loading activity...</div>;
   if (error) return <div className="error">Error: {error.message}</div>;
+
+  const formatActivityType = (type: string) => {
+    return type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+  };
+
+  const getActivityIcon = (type: string) => {
+    switch (type) {
+      case 'request_created': return '📝';
+      case 'request_verified': return '✓';
+      case 'request_assigned': return '👤';
+      case 'request_status_changed': return '🔄';
+      case 'request_completed': return '✅';
+      case 'request_rejected': return '❌';
+      case 'task_created': return '📋';
+      case 'task_started': return '▶️';
+      case 'task_completed': return '✅';
+      case 'task_failed': return '❌';
+      case 'task_skipped': return '⏭️';
+      case 'note_added': return '💬';
+      default: return '•';
+    }
+  };
 
   return (
     <div>
-      <h2>Audit Logs ({total} total)</h2>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Action</th>
-            <th>Resource</th>
-            <th>Actor</th>
-            <th>IP Address</th>
-          </tr>
-        </thead>
-        <tbody>
-          {logs.map((log) => (
-            <tr key={log.id}>
-              <td>{new Date(log.createdAt).toLocaleString()}</td>
-              <td>{log.action}</td>
-              <td>{log.resourceType}{log.resourceId ? `: ${log.resourceId.slice(0, 8)}` : ''}</td>
-              <td>{log.actorType}{log.userId ? `: ${log.userId.slice(0, 8)}` : ''}</td>
-              <td>{log.ipAddress || '-'}</td>
-            </tr>
+      <h2>Activity Log ({total} entries)</h2>
+      {activities.length === 0 ? (
+        <p className="empty-state">No activity recorded yet. Activities will appear here as requests are processed.</p>
+      ) : (
+        <div className="activity-list">
+          {activities.map((activity) => (
+            <div key={activity.id} className="activity-item">
+              <span className="activity-icon">{getActivityIcon(activity.activityType)}</span>
+              <div className="activity-content">
+                <div className="activity-description">
+                  <strong>{activity.description}</strong>
+                  {activity.piiLocationName && (
+                    <span className="activity-location"> on {activity.piiLocationName}</span>
+                  )}
+                </div>
+                <div className="activity-meta">
+                  <span className="activity-type">{formatActivityType(activity.activityType)}</span>
+                  {activity.actorName && (
+                    <span className="activity-actor"> by {activity.actorName}</span>
+                  )}
+                  {!activity.actorName && activity.actorType === 'system' && (
+                    <span className="activity-actor"> by System</span>
+                  )}
+                  <span className="activity-time">
+                    {new Date(activity.createdAt).toLocaleString()}
+                  </span>
+                </div>
+                {activity.previousStatus && activity.newStatus && (
+                  <div className="activity-status-change">
+                    Status: {activity.previousStatus} → {activity.newStatus}
+                  </div>
+                )}
+              </div>
+            </div>
           ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ConsentTab() {
-  const { records, loading, error, metrics } = useConsent({ includeMetrics: true, pageSize: 20 });
-
-  if (loading) return <div className="loading">Loading consent records...</div>;
-  if (error) return <div className="error">Error: {error.message}</div>;
-
-  return (
-    <div>
-      <h2>Consent Management</h2>
-      {metrics && (
-        <div className="metrics-grid">
-          <div className="metric-card">
-            <div className="metric-label">Active Consents</div>
-            <div className="metric-value">{metrics.totalActive}</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">Consent Rate</div>
-            <div className="metric-value">{metrics.consentRate}%</div>
-          </div>
-          <div className="metric-card">
-            <div className="metric-label">Recent Withdrawals</div>
-            <div className="metric-value">{metrics.recentWithdrawals}</div>
-          </div>
         </div>
       )}
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Customer</th>
-            <th>Type</th>
-            <th>Status</th>
-            <th>Method</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((record) => (
-            <tr key={record.id}>
-              <td>{record.customerId.slice(0, 8)}...</td>
-              <td>{record.consentType}</td>
-              <td>
-                <span className={`badge ${record.consentGranted ? 'badge-success' : 'badge-danger'}`}>
-                  {record.consentGranted ? 'Granted' : 'Revoked'}
-                </span>
-              </td>
-              <td>{record.method}</td>
-              <td>{new Date(record.createdAt).toLocaleDateString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <style>{`
+        .activity-list {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+        .activity-item {
+          display: flex;
+          gap: 0.75rem;
+          padding: 0.75rem;
+          background: #f9fafb;
+          border-radius: 0.5rem;
+          border-left: 3px solid #e5e7eb;
+        }
+        .activity-item:hover {
+          background: #f3f4f6;
+        }
+        .activity-icon {
+          font-size: 1.25rem;
+          flex-shrink: 0;
+        }
+        .activity-content {
+          flex: 1;
+          min-width: 0;
+        }
+        .activity-description {
+          font-size: 0.875rem;
+          color: #111827;
+        }
+        .activity-location {
+          color: #6b7280;
+          font-weight: normal;
+        }
+        .activity-meta {
+          font-size: 0.75rem;
+          color: #6b7280;
+          margin-top: 0.25rem;
+        }
+        .activity-type {
+          background: #e5e7eb;
+          padding: 0.125rem 0.375rem;
+          border-radius: 0.25rem;
+          margin-right: 0.5rem;
+        }
+        .activity-time {
+          margin-left: 0.5rem;
+        }
+        .activity-status-change {
+          font-size: 0.75rem;
+          color: #4b5563;
+          margin-top: 0.25rem;
+          font-family: monospace;
+        }
+        .empty-state {
+          color: #6b7280;
+          text-align: center;
+          padding: 2rem;
+        }
+      `}</style>
     </div>
   );
 }
@@ -677,38 +709,6 @@ function ReportsTab() {
         <li>Consent Analytics</li>
         <li>Data Retention Status</li>
       </ul>
-    </div>
-  );
-}
-
-function PrivacyTab() {
-  const { metrics, loading, error } = useComplianceMetrics();
-
-  if (loading) return <div className="loading">Loading privacy dashboard...</div>;
-  if (error) return <div className="error">Error: {error.message}</div>;
-  if (!metrics) return <div className="loading">No data available</div>;
-
-  return (
-    <div>
-      <h2>Privacy Dashboard</h2>
-      <div className="metrics-grid">
-        <div className="metric-card">
-          <div className="metric-label">Data Subject Requests This Month</div>
-          <div className="metric-value">{metrics.gdprRequests.total}</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-label">Average Response Time</div>
-          <div className="metric-value">{metrics.gdprRequests.avgResponseDays} days</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-label">On-Time Completion</div>
-          <div className="metric-value">{metrics.gdprRequests.complianceRate}%</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-label">High Risk Events</div>
-          <div className="metric-value">{metrics.audit.highRiskEvents}</div>
-        </div>
-      </div>
     </div>
   );
 }
