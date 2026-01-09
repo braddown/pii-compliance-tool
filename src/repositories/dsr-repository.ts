@@ -6,13 +6,12 @@ import {
   NotFoundError,
 } from './base-repository';
 import type {
-  GDPRRequest,
-  CreateGDPRRequestInput,
-  UpdateGDPRRequestInput,
-  GDPRRequestQueryOptions,
-  GDPRRequestMetrics,
-  GDPR_RESPONSE_DEADLINE_DAYS,
-} from '../types/gdpr-request';
+  DataSubjectRequest,
+  CreateDSRInput,
+  UpdateDSRInput,
+  DSRQueryOptions,
+  DSRMetrics,
+} from '../types/data-subject-request';
 
 /**
  * Database row type for data subject requests
@@ -39,10 +38,10 @@ interface DSRRow {
 }
 
 /**
- * Repository for Data Subject Request (GDPR) operations
+ * Repository for Data Subject Request (DSR) operations
  */
 export class DataSubjectRequestRepository extends BaseRepository {
-  private readonly responseDays = 30; // GDPR Article 12
+  private readonly responseDays = 30; // Standard response deadline
 
   constructor(
     supabase: SupabaseClient,
@@ -53,9 +52,9 @@ export class DataSubjectRequestRepository extends BaseRepository {
   }
 
   /**
-   * Create a new GDPR request
+   * Create a new data subject request
    */
-  async create(input: CreateGDPRRequestInput): Promise<GDPRRequest> {
+  async create(input: CreateDSRInput): Promise<DataSubjectRequest> {
     await this.setTenantContext();
 
     const now = new Date();
@@ -86,16 +85,16 @@ export class DataSubjectRequestRepository extends BaseRepository {
       .single();
 
     if (error) {
-      this.handleError(error, 'create GDPR request');
+      this.handleError(error, 'create data subject request');
     }
 
-    return this.mapToGDPRRequest(data);
+    return this.mapToDataSubjectRequest(data);
   }
 
   /**
-   * Update a GDPR request
+   * Update a data subject request
    */
-  async update(id: string, input: UpdateGDPRRequestInput): Promise<GDPRRequest> {
+  async update(id: string, input: UpdateDSRInput): Promise<DataSubjectRequest> {
     await this.setTenantContext();
 
     const updates: Record<string, unknown> = {};
@@ -144,18 +143,18 @@ export class DataSubjectRequestRepository extends BaseRepository {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        throw new NotFoundError('GDPR Request', id);
+        throw new NotFoundError('Data Subject Request', id);
       }
-      this.handleError(error, 'update GDPR request');
+      this.handleError(error, 'update data subject request');
     }
 
-    return this.mapToGDPRRequest(data);
+    return this.mapToDataSubjectRequest(data);
   }
 
   /**
-   * Find a GDPR request by ID
+   * Find a data subject request by ID
    */
-  async findById(id: string): Promise<GDPRRequest | null> {
+  async findById(id: string): Promise<DataSubjectRequest | null> {
     await this.setTenantContext();
 
     const { data, error } = await this.supabase
@@ -168,17 +167,17 @@ export class DataSubjectRequestRepository extends BaseRepository {
       if (error.code === 'PGRST116') {
         return null;
       }
-      this.handleError(error, 'find GDPR request');
+      this.handleError(error, 'find data subject request');
     }
 
-    return data ? this.mapToGDPRRequest(data) : null;
+    return data ? this.mapToDataSubjectRequest(data) : null;
   }
 
   /**
-   * Query GDPR requests with filtering and pagination
+   * Query data subject requests with filtering and pagination
    */
-  async query(options: GDPRRequestQueryOptions = {}): Promise<{
-    data: GDPRRequest[];
+  async query(options: DSRQueryOptions = {}): Promise<{
+    data: DataSubjectRequest[];
     total: number;
   }> {
     await this.setTenantContext();
@@ -272,11 +271,11 @@ export class DataSubjectRequestRepository extends BaseRepository {
     const { data, error, count } = await query;
 
     if (error) {
-      this.handleError(error, 'query GDPR requests');
+      this.handleError(error, 'query data subject requests');
     }
 
     return {
-      data: (data || []).map((row) => this.mapToGDPRRequest(row)),
+      data: (data || []).map((row) => this.mapToDataSubjectRequest(row)),
       total: count ?? 0,
     };
   }
@@ -284,7 +283,7 @@ export class DataSubjectRequestRepository extends BaseRepository {
   /**
    * Get pending requests assigned to a user
    */
-  async getAssignedTo(userId: string): Promise<GDPRRequest[]> {
+  async getAssignedTo(userId: string): Promise<DataSubjectRequest[]> {
     const { data } = await this.query({
       assignedTo: userId,
       status: ['pending', 'in_progress', 'review'],
@@ -295,7 +294,7 @@ export class DataSubjectRequestRepository extends BaseRepository {
   /**
    * Get overdue requests
    */
-  async getOverdue(): Promise<GDPRRequest[]> {
+  async getOverdue(): Promise<DataSubjectRequest[]> {
     const { data } = await this.query({ overdue: true });
     return data;
   }
@@ -303,7 +302,7 @@ export class DataSubjectRequestRepository extends BaseRepository {
   /**
    * Get requests due soon (within 7 days)
    */
-  async getDueSoon(): Promise<GDPRRequest[]> {
+  async getDueSoon(): Promise<DataSubjectRequest[]> {
     const { data } = await this.query({ dueSoon: true });
     return data;
   }
@@ -311,10 +310,10 @@ export class DataSubjectRequestRepository extends BaseRepository {
   /**
    * Add a processing note to a request
    */
-  async addNote(id: string, note: string, author: string): Promise<GDPRRequest> {
+  async addNote(id: string, note: string, author: string): Promise<DataSubjectRequest> {
     const existing = await this.findById(id);
     if (!existing) {
-      throw new NotFoundError('GDPR Request', id);
+      throw new NotFoundError('Data Subject Request', id);
     }
 
     const processingNotes = existing.metadata.processingNotes || [];
@@ -330,9 +329,9 @@ export class DataSubjectRequestRepository extends BaseRepository {
   }
 
   /**
-   * Get GDPR request metrics
+   * Get data subject request metrics
    */
-  async getMetrics(): Promise<GDPRRequestMetrics> {
+  async getMetrics(): Promise<DSRMetrics> {
     await this.setTenantContext();
 
     const { data, error } = await this.supabase
@@ -340,7 +339,7 @@ export class DataSubjectRequestRepository extends BaseRepository {
       .select('status, request_type, due_date, requested_at, completed_at');
 
     if (error) {
-      this.handleError(error, 'get GDPR metrics');
+      this.handleError(error, 'get DSR metrics');
     }
 
     const now = new Date();
@@ -362,6 +361,7 @@ export class DataSubjectRequestRepository extends BaseRepository {
       restriction: 0,
       portability: 0,
       objection: 0,
+      consent: 0,
     };
 
     for (const row of data || []) {
@@ -422,28 +422,28 @@ export class DataSubjectRequestRepository extends BaseRepository {
       dueSoon,
       avgResponseDays,
       complianceRate,
-      byType: byType as GDPRRequestMetrics['byType'],
+      byType: byType as DSRMetrics['byType'],
     };
   }
 
   /**
-   * Map database row to GDPRRequest type
+   * Map database row to DataSubjectRequest type
    */
-  private mapToGDPRRequest(row: DSRRow): GDPRRequest {
+  private mapToDataSubjectRequest(row: DSRRow): DataSubjectRequest {
     return {
       id: row.id,
       tenantId: row.tenant_id,
       customerId: row.customer_id,
-      requestType: row.request_type as GDPRRequest['requestType'],
-      status: row.status as GDPRRequest['status'],
-      priority: row.priority as GDPRRequest['priority'],
+      requestType: row.request_type as DataSubjectRequest['requestType'],
+      status: row.status as DataSubjectRequest['status'],
+      priority: row.priority as DataSubjectRequest['priority'],
       requesterEmail: row.requester_email,
       requesterPhone: row.requester_phone,
-      verificationMethod: row.verification_method as GDPRRequest['verificationMethod'],
+      verificationMethod: row.verification_method as DataSubjectRequest['verificationMethod'],
       verifiedAt: row.verified_at ? new Date(row.verified_at) : null,
       assignedTo: row.assigned_to,
       notes: row.notes,
-      metadata: row.metadata as GDPRRequest['metadata'],
+      metadata: row.metadata as DataSubjectRequest['metadata'],
       requestedAt: new Date(row.requested_at),
       dueDate: new Date(row.due_date),
       completedAt: row.completed_at ? new Date(row.completed_at) : null,

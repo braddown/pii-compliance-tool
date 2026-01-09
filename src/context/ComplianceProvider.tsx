@@ -6,6 +6,8 @@ import type { ComplianceConfig, ComplianceFeatures, ComplianceClassNames } from 
 import { AuditLogRepository } from '../repositories/audit-log-repository';
 import { ConsentRecordRepository } from '../repositories/consent-repository';
 import { DataSubjectRequestRepository } from '../repositories/dsr-repository';
+import { PIILocationRepository } from '../repositories/pii-location-repository';
+import { ActionTaskRepository } from '../repositories/action-task-repository';
 
 /**
  * Context value containing config and repositories
@@ -16,6 +18,8 @@ interface ComplianceContextValue {
     auditLog: AuditLogRepository;
     consent: ConsentRecordRepository;
     dsr: DataSubjectRequestRepository;
+    piiLocations: PIILocationRepository;
+    actionTasks: ActionTaskRepository;
   };
   features: Required<ComplianceFeatures>;
   apiBasePath: string;
@@ -74,6 +78,8 @@ export function ComplianceProvider({ config, children }: ComplianceProviderProps
         auditLog: new AuditLogRepository(config.supabase, config.tenantId, repoConfig),
         consent: new ConsentRecordRepository(config.supabase, config.tenantId, repoConfig),
         dsr: new DataSubjectRequestRepository(config.supabase, config.tenantId, repoConfig),
+        piiLocations: new PIILocationRepository(config.supabase, config.tenantId, repoConfig),
+        actionTasks: new ActionTaskRepository(config.supabase, config.tenantId, repoConfig),
       },
       features: {
         ...DEFAULT_FEATURES,

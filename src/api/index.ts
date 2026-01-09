@@ -1,6 +1,10 @@
 export { createAuditLogsHandler } from './handlers/audit-logs';
-export { createGDPRRequestsHandler } from './handlers/gdpr-requests';
+export { createDataSubjectRequestsHandler, createGDPRRequestsHandler } from './handlers/data-subject-requests';
 export { createConsentHandler } from './handlers/consent';
 export { createMetricsHandler } from './handlers/metrics';
+export { createPIILocationsHandler } from './handlers/pii-locations';
+export { createActionTasksHandler } from './handlers/action-tasks';
+export { createPublicRequestHandler } from './handlers/public-requests';
+export type { PublicRequestHandlerConfig } from './handlers/public-requests';
 export { createComplianceRouter } from './router';
 export type { APIHandlerConfig, ComplianceRouter, ResourceHandlers } from '../types/api';

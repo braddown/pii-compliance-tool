@@ -4,7 +4,7 @@ import { AuditLogRepository } from '../../repositories/audit-log-repository';
 import { ConsentRecordRepository } from '../../repositories/consent-repository';
 import { DataSubjectRequestRepository } from '../../repositories/dsr-repository';
 import type { APIHandlerConfig, ResourceHandlers, APIResponse } from '../../types/api';
-import type { GDPRRequestMetrics } from '../../types/gdpr-request';
+import type { GDPRRequestMetrics } from '../../types/data-subject-request';
 import type { ConsentMetrics } from '../../types/consent';
 
 /**

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useComplianceContext } from '../context/ComplianceProvider';
-import type { GDPRRequestMetrics } from '../types/gdpr-request';
+import type { GDPRRequestMetrics } from '../types/data-subject-request';
 import type { ConsentMetrics } from '../types/consent';
 
 export interface AuditMetrics {

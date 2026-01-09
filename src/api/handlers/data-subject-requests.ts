@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { DataSubjectRequestRepository } from '../../repositories/dsr-repository';
 import type { APIHandlerConfig, ResourceHandlers, APIResponse, PaginatedResponse } from '../../types/api';
-import type { GDPRRequest, GDPRRequestQueryOptions } from '../../types/gdpr-request';
+import type { DataSubjectRequest, DSRQueryOptions } from '../../types/data-subject-request';
 
 // Query parameter schemas
 const QueryParamsSchema = z.object({
@@ -23,7 +23,7 @@ const QueryParamsSchema = z.object({
 
 const CreateRequestSchema = z.object({
   customerId: z.string().uuid().optional(),
-  requestType: z.enum(['access', 'rectification', 'erasure', 'restriction', 'portability', 'objection']),
+  requestType: z.enum(['access', 'rectification', 'erasure', 'restriction', 'portability', 'objection', 'consent']),
   requesterEmail: z.string().email(),
   requesterPhone: z.string().optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
@@ -32,7 +32,7 @@ const CreateRequestSchema = z.object({
 });
 
 const UpdateRequestSchema = z.object({
-  status: z.enum(['pending', 'in_progress', 'review', 'completed', 'rejected', 'cancelled']).optional(),
+  status: z.enum(['pending', 'pending_verification', 'in_progress', 'review', 'completed', 'rejected', 'cancelled']).optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   verificationMethod: z.enum(['email', 'phone', 'in_person', 'verified_id', 'two_factor']).optional(),
@@ -45,13 +45,13 @@ function getSupabaseClient(config: APIHandlerConfig): SupabaseClient {
 }
 
 /**
- * Create handlers for GDPR request endpoints
+ * Create handlers for data subject request endpoints
  */
-export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHandlers {
+export function createDataSubjectRequestsHandler(config: APIHandlerConfig): ResourceHandlers {
   return {
     /**
-     * GET /api/compliance/gdpr-requests
-     * Query GDPR requests with filtering and pagination
+     * GET /api/compliance/data-subject-requests
+     * Query data subject requests with filtering and pagination
      */
     GET: async (request: NextRequest): Promise<Response> => {
       try {
@@ -65,18 +65,18 @@ export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHan
         const pathParts = request.nextUrl.pathname.split('/');
         const requestId = pathParts[pathParts.length - 1];
 
-        if (requestId && requestId !== 'gdpr-requests' && z.string().uuid().safeParse(requestId).success) {
+        if (requestId && requestId !== 'data-subject-requests' && z.string().uuid().safeParse(requestId).success) {
           // Get single request
-          const gdprRequest = await repo.findById(requestId);
+          const dsrRequest = await repo.findById(requestId);
 
-          if (!gdprRequest) {
+          if (!dsrRequest) {
             return NextResponse.json(
-              { success: false, error: 'GDPR request not found' },
+              { success: false, error: 'Data subject request not found' },
               { status: 404 }
             );
           }
 
-          return NextResponse.json({ success: true, data: gdprRequest });
+          return NextResponse.json({ success: true, data: dsrRequest });
         }
 
         // Parse query parameters
@@ -93,7 +93,7 @@ export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHan
         const { limit, offset, orderBy, orderDirection, ...filters } = params.data;
 
         // Parse array filters
-        const queryOptions: GDPRRequestQueryOptions = {
+        const queryOptions: DSRQueryOptions = {
           limit,
           offset,
           orderBy,
@@ -101,13 +101,13 @@ export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHan
         };
 
         if (filters.status) {
-          queryOptions.status = filters.status.split(',') as GDPRRequest['status'][];
+          queryOptions.status = filters.status.split(',') as DataSubjectRequest['status'][];
         }
         if (filters.requestType) {
-          queryOptions.requestType = filters.requestType.split(',') as GDPRRequest['requestType'][];
+          queryOptions.requestType = filters.requestType.split(',') as DataSubjectRequest['requestType'][];
         }
         if (filters.priority) {
-          queryOptions.priority = filters.priority.split(',') as GDPRRequest['priority'][];
+          queryOptions.priority = filters.priority.split(',') as DataSubjectRequest['priority'][];
         }
         if (filters.assignedTo) queryOptions.assignedTo = filters.assignedTo;
         if (filters.customerId) queryOptions.customerId = filters.customerId;
@@ -117,7 +117,7 @@ export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHan
 
         const { data, total } = await repo.query(queryOptions);
 
-        const response: PaginatedResponse<GDPRRequest> = {
+        const response: PaginatedResponse<DataSubjectRequest> = {
           success: true,
           data,
           meta: {
@@ -130,17 +130,17 @@ export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHan
 
         return NextResponse.json(response);
       } catch (error) {
-        console.error('[GDPRRequests] GET error:', error);
+        console.error('[DataSubjectRequests] GET error:', error);
         return NextResponse.json(
-          { success: false, error: 'Failed to fetch GDPR requests' },
+          { success: false, error: 'Failed to fetch data subject requests' },
           { status: 500 }
         );
       }
     },
 
     /**
-     * POST /api/compliance/gdpr-requests
-     * Create a new GDPR request
+     * POST /api/compliance/data-subject-requests
+     * Create a new data subject request
      */
     POST: async (request: NextRequest): Promise<Response> => {
       try {
@@ -160,38 +160,38 @@ export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHan
           );
         }
 
-        const gdprRequest = await repo.create(parsed.data);
+        const dsrRequest = await repo.create(parsed.data);
 
         // Audit log
         if (config.auditLog) {
           await config.auditLog({
-            action: 'gdpr_request.created',
-            resourceType: 'gdpr_request',
-            resourceId: gdprRequest.id,
+            action: 'dsr.created',
+            resourceType: 'data_subject_request',
+            resourceId: dsrRequest.id,
             tenantId,
-            metadata: { requestType: gdprRequest.requestType },
+            metadata: { requestType: dsrRequest.requestType },
           });
         }
 
-        const response: APIResponse<GDPRRequest> = {
+        const response: APIResponse<DataSubjectRequest> = {
           success: true,
-          data: gdprRequest,
-          message: 'GDPR request created',
+          data: dsrRequest,
+          message: 'Data subject request created',
         };
 
         return NextResponse.json(response, { status: 201 });
       } catch (error) {
-        console.error('[GDPRRequests] POST error:', error);
+        console.error('[DataSubjectRequests] POST error:', error);
         return NextResponse.json(
-          { success: false, error: 'Failed to create GDPR request' },
+          { success: false, error: 'Failed to create data subject request' },
           { status: 500 }
         );
       }
     },
 
     /**
-     * PUT /api/compliance/gdpr-requests/[id]
-     * Update a GDPR request
+     * PUT /api/compliance/data-subject-requests/[id]
+     * Update a data subject request
      */
     PUT: async (request: NextRequest): Promise<Response> => {
       try {
@@ -222,36 +222,36 @@ export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHan
           );
         }
 
-        const gdprRequest = await repo.update(requestId, parsed.data);
+        const dsrRequest = await repo.update(requestId, parsed.data);
 
         // Audit log
         if (config.auditLog) {
           await config.auditLog({
-            action: 'gdpr_request.updated',
-            resourceType: 'gdpr_request',
-            resourceId: gdprRequest.id,
+            action: 'dsr.updated',
+            resourceType: 'data_subject_request',
+            resourceId: dsrRequest.id,
             tenantId,
-            metadata: { status: gdprRequest.status },
+            metadata: { status: dsrRequest.status },
           });
         }
 
-        const response: APIResponse<GDPRRequest> = {
+        const response: APIResponse<DataSubjectRequest> = {
           success: true,
-          data: gdprRequest,
-          message: 'GDPR request updated',
+          data: dsrRequest,
+          message: 'Data subject request updated',
         };
 
         return NextResponse.json(response);
       } catch (error) {
-        console.error('[GDPRRequests] PUT error:', error);
+        console.error('[DataSubjectRequests] PUT error:', error);
         if ((error as Error).name === 'NotFoundError') {
           return NextResponse.json(
-            { success: false, error: 'GDPR request not found' },
+            { success: false, error: 'Data subject request not found' },
             { status: 404 }
           );
         }
         return NextResponse.json(
-          { success: false, error: 'Failed to update GDPR request' },
+          { success: false, error: 'Failed to update data subject request' },
           { status: 500 }
         );
       }
@@ -261,7 +261,15 @@ export function createGDPRRequestsHandler(config: APIHandlerConfig): ResourceHan
      * PATCH - alias for PUT
      */
     PATCH: async (request: NextRequest): Promise<Response> => {
-      return createGDPRRequestsHandler(config).PUT!(request);
+      return createDataSubjectRequestsHandler(config).PUT!(request);
     },
   };
 }
+
+// =============================================================================
+// BACKWARDS COMPATIBILITY ALIASES
+// These are deprecated and will be removed in a future version
+// =============================================================================
+
+/** @deprecated Use createDataSubjectRequestsHandler instead */
+export const createGDPRRequestsHandler = createDataSubjectRequestsHandler;

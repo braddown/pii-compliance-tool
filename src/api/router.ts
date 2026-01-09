@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { APIHandlerConfig, ComplianceRouter, RouteHandler } from '../types/api';
 import { createAuditLogsHandler } from './handlers/audit-logs';
-import { createGDPRRequestsHandler } from './handlers/gdpr-requests';
+import { createDataSubjectRequestsHandler } from './handlers/data-subject-requests';
 import { createConsentHandler } from './handlers/consent';
 import { createMetricsHandler } from './handlers/metrics';
+import { createPIILocationsHandler } from './handlers/pii-locations';
+import { createActionTasksHandler } from './handlers/action-tasks';
 
 /**
  * Create a compliance router that handles all compliance API routes
@@ -27,11 +29,16 @@ import { createMetricsHandler } from './handlers/metrics';
  * ```
  */
 export function createComplianceRouter(config: APIHandlerConfig): ComplianceRouter {
+  const dataSubjectRequestsHandler = createDataSubjectRequestsHandler(config);
   const handlers = {
     auditLogs: createAuditLogsHandler(config),
-    gdprRequests: createGDPRRequestsHandler(config),
+    dataSubjectRequests: dataSubjectRequestsHandler,
+    // Backwards compatibility alias
+    gdprRequests: dataSubjectRequestsHandler,
     consent: createConsentHandler(config),
     metrics: createMetricsHandler(config),
+    piiLocations: createPIILocationsHandler(config),
+    actionTasks: createActionTasksHandler(config),
     reports: {}, // TODO: Implement reports handler
   };
 
@@ -66,15 +73,15 @@ export function createComplianceRouter(config: APIHandlerConfig): ComplianceRout
         }
       }
 
-      // GDPR requests: /api/compliance/gdpr-requests
-      if (pathname.includes('/gdpr-requests')) {
-        if (config.enabledEndpoints?.gdprRequests === false) {
+      // Data Subject Requests: /api/compliance/data-subject-requests (or /gdpr-requests for backwards compatibility)
+      if (pathname.includes('/data-subject-requests') || pathname.includes('/gdpr-requests')) {
+        if (config.enabledEndpoints?.gdprRequests === false && config.enabledEndpoints?.dataSubjectRequests === false) {
           return NextResponse.json(
-            { success: false, error: 'GDPR requests endpoint is disabled' },
+            { success: false, error: 'Data subject requests endpoint is disabled' },
             { status: 404 }
           );
         }
-        const handler = handlers.gdprRequests[method as keyof typeof handlers.gdprRequests];
+        const handler = handlers.dataSubjectRequests[method as keyof typeof handlers.dataSubjectRequests];
         if (handler) {
           return handler(request);
         }
@@ -103,6 +110,34 @@ export function createComplianceRouter(config: APIHandlerConfig): ComplianceRout
           );
         }
         const handler = handlers.metrics[method as keyof typeof handlers.metrics];
+        if (handler) {
+          return handler(request);
+        }
+      }
+
+      // PII Locations: /api/compliance/pii-locations
+      if (pathname.includes('/pii-locations')) {
+        if (config.enabledEndpoints?.piiLocations === false) {
+          return NextResponse.json(
+            { success: false, error: 'PII locations endpoint is disabled' },
+            { status: 404 }
+          );
+        }
+        const handler = handlers.piiLocations[method as keyof typeof handlers.piiLocations];
+        if (handler) {
+          return handler(request);
+        }
+      }
+
+      // Action Tasks: /api/compliance/action-tasks
+      if (pathname.includes('/action-tasks')) {
+        if (config.enabledEndpoints?.actionTasks === false) {
+          return NextResponse.json(
+            { success: false, error: 'Action tasks endpoint is disabled' },
+            { status: 404 }
+          );
+        }
+        const handler = handlers.actionTasks[method as keyof typeof handlers.actionTasks];
         if (handler) {
           return handler(request);
         }

@@ -9,6 +9,8 @@ export {
   AuditLogRepository,
   ConsentRecordRepository,
   DataSubjectRequestRepository,
+  PIILocationRepository,
+  ActionTaskRepository,
 } from './repositories';
 export { DatabaseError, NotFoundError, ValidationError } from './repositories/base-repository';
 
@@ -27,6 +29,8 @@ export {
   useGDPRRequests,
   useConsent,
   useComplianceMetrics,
+  usePIILocations,
+  useActionTasks,
 } from './hooks';
 
 // API Handlers
@@ -36,7 +40,11 @@ export {
   createGDPRRequestsHandler,
   createConsentHandler,
   createMetricsHandler,
+  createPIILocationsHandler,
+  createActionTasksHandler,
+  createPublicRequestHandler,
 } from './api';
+export type { PublicRequestHandlerConfig } from './api';
 
 // Components (re-export from components/index)
 export * from './components';

@@ -93,10 +93,14 @@ export interface APIHandlerConfig {
    */
   enabledEndpoints?: {
     auditLogs?: boolean;
+    dataSubjectRequests?: boolean;
+    /** @deprecated Use dataSubjectRequests instead */
     gdprRequests?: boolean;
     consent?: boolean;
     reports?: boolean;
     metrics?: boolean;
+    piiLocations?: boolean;
+    actionTasks?: boolean;
   };
 }
 
@@ -139,10 +143,14 @@ export interface ComplianceRouter {
   handleRequest: RouteHandler;
   handlers: {
     auditLogs: ResourceHandlers;
+    dataSubjectRequests: ResourceHandlers;
+    /** @deprecated Use dataSubjectRequests instead */
     gdprRequests: ResourceHandlers;
     consent: ResourceHandlers;
     reports: ResourceHandlers;
     metrics: ResourceHandlers;
+    piiLocations: ResourceHandlers;
+    actionTasks: ResourceHandlers;
   };
 }
 
@@ -150,7 +158,7 @@ export interface ComplianceRouter {
  * Report generation options
  */
 export interface ReportGenerationOptions {
-  reportType: 'gdpr-compliance' | 'audit-summary' | 'retention-status' | 'consent-overview';
+  reportType: 'privacy-compliance' | 'audit-summary' | 'retention-status' | 'consent-overview';
   format: 'json' | 'csv' | 'pdf';
   startDate?: Date;
   endDate?: Date;
