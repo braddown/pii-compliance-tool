@@ -420,9 +420,11 @@ export class PIILocationRepository extends BaseRepository {
     const bySystemType: Record<PIISystemType, number> = {
       database: 0,
       api: 0,
-      manual: 0,
+      saas_platform: 0,
+      crm: 0,
+      cdp: 0,
       file_storage: 0,
-      third_party: 0,
+      manual: 0,
     };
 
     const byExecutionType: Record<PIIExecutionType, number> = {

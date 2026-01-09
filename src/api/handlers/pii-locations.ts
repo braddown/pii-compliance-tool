@@ -91,7 +91,7 @@ const ActionConfigSchema = z.union([AutomatedActionConfigSchema, ManualActionCon
 const CreateLocationSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().optional(),
-  systemType: z.enum(['database', 'api', 'manual', 'file_storage', 'third_party']),
+  systemType: z.enum(['database', 'api', 'saas_platform', 'crm', 'cdp', 'file_storage', 'manual']),
   executionType: z.enum(['automated', 'semi_automated', 'manual']),
   supportedRequestTypes: z.array(z.enum(['access', 'rectification', 'erasure', 'restriction', 'portability', 'objection'])).optional(),
   priorityOrder: z.number().min(1).max(1000).optional(),

@@ -17,10 +17,12 @@ import type { AutomatedActionConfig, ManualActionConfig } from './action-config'
  */
 export type PIISystemType =
   | 'database'      // Direct database access (PostgreSQL, MySQL, MongoDB)
-  | 'api'           // External API (SaaS, internal microservice)
-  | 'manual'        // Manual process (CRM without API, paper records)
+  | 'api'           // External API (internal microservice, custom integrations)
+  | 'saas_platform' // SaaS platform (general cloud software)
+  | 'crm'           // Customer Relationship Management (Salesforce, HubSpot)
+  | 'cdp'           // Customer Data Platform (Segment, mParticle)
   | 'file_storage'  // File storage (S3, GCS, local filesystem)
-  | 'third_party';  // Third-party vendor requiring coordination
+  | 'manual';       // Manual process (paper records, legacy systems)
 
 /**
  * Execution types for PII actions
@@ -36,9 +38,11 @@ export type PIIExecutionType =
 export const PII_SYSTEM_TYPES: PIISystemType[] = [
   'database',
   'api',
-  'manual',
+  'saas_platform',
+  'crm',
+  'cdp',
   'file_storage',
-  'third_party',
+  'manual',
 ];
 
 /**

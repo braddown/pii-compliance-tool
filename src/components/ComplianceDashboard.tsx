@@ -945,9 +945,11 @@ function LocationFormModal({
             >
               <option value="database">Database</option>
               <option value="api">API</option>
-              <option value="manual">Manual System</option>
+              <option value="saas_platform">SaaS Platform</option>
+              <option value="crm">CRM</option>
+              <option value="cdp">CDP</option>
               <option value="file_storage">File Storage</option>
-              <option value="third_party">Third Party</option>
+              <option value="manual">Manual System</option>
             </select>
           </div>
           <div className="form-group">
@@ -1233,9 +1235,11 @@ function getSystemTypeColor(type: string): string {
   switch (type) {
     case 'database': return 'info';
     case 'api': return 'success';
-    case 'manual': return 'warning';
+    case 'saas_platform': return 'info';
+    case 'crm': return 'success';
+    case 'cdp': return 'success';
     case 'file_storage': return 'neutral';
-    case 'third_party': return 'danger';
+    case 'manual': return 'warning';
     default: return 'info';
   }
 }
