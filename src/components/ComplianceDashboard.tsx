@@ -824,6 +824,17 @@ function DataRegistryTab() {
                   >
                     Verify
                   </button>
+                  <button
+                    className="btn btn-sm btn-secondary"
+                    style={{ color: '#dc2626' }}
+                    onClick={() => {
+                      if (confirm(`Delete "${location.name}"? This will deactivate the location.`)) {
+                        deleteLocation(location.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </td>
             </tr>
