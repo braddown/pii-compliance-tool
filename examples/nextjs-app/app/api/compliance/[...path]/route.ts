@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createComplianceRouter } from 'pii-compliance-tool/api';
+import { createComplianceRouter } from 'omnipii/api';
 import { createMockSupabaseClient, MOCK_TENANT_ID } from '@/lib/mock-supabase';
 
 // Create mock Supabase client

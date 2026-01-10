@@ -1,6 +1,6 @@
 'use client';
 
-import { ComplianceProvider, ComplianceDashboard } from 'pii-compliance-tool';
+import { ComplianceProvider, ComplianceDashboard } from 'omnipii';
 import { createMockSupabaseClient, MOCK_TENANT_ID, MOCK_USER_ID } from '@/lib/mock-supabase';
 
 // Create mock Supabase client
@@ -33,23 +33,27 @@ export default function CompliancePage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <h1 style={{ margin: 0, fontSize: '1.25rem' }}>Compliance Dashboard</h1>
+              <h1 style={{ margin: 0, fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ color: '#4f46e5', fontWeight: 700 }}>Omnipii</span>
+                <span style={{ color: '#9ca3af', fontWeight: 400 }}>|</span>
+                <span>Compliance Dashboard</span>
+              </h1>
               <p style={{ margin: '0.25rem 0 0', color: '#6b7280', fontSize: '0.875rem' }}>
-                PII Compliance Tool - Demo Mode
+                Privacy compliance toolkit - Demo Mode
               </p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <span
                 style={{
                   padding: '0.25rem 0.75rem',
-                  backgroundColor: '#dcfce7',
-                  color: '#166534',
+                  backgroundColor: '#eef2ff',
+                  color: '#4f46e5',
                   borderRadius: '9999px',
                   fontSize: '0.75rem',
                   fontWeight: 500,
                 }}
               >
-                Mock Data
+                Demo Mode
               </span>
               <span style={{ fontSize: '0.875rem', color: '#6b7280' }}>
                 Tenant: {MOCK_TENANT_ID}
@@ -61,6 +65,17 @@ export default function CompliancePage() {
         <main style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
           <ComplianceDashboard />
         </main>
+
+        <footer
+          style={{
+            textAlign: 'center',
+            padding: '1rem',
+            color: '#9ca3af',
+            fontSize: '0.75rem',
+          }}
+        >
+          Powered by <a href="https://omnipii.com" style={{ color: '#4f46e5' }}>Omnipii</a> - Privacy Compliance Made Simple
+        </footer>
       </div>
     </ComplianceProvider>
   );
