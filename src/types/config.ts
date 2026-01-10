@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { DatabaseConfiguration } from '../database/types';
 
 /**
  * Feature flags for the compliance module
@@ -128,14 +129,25 @@ export interface AuditEventCallback {
  */
 export interface ComplianceConfig {
   /**
-   * Supabase client instance from the host application
+   * Database configuration (new approach)
+   * Choose from:
+   * - { type: 'omnipii', config: { apiKey } } - Omnipii Cloud (recommended)
+   * - { type: 'supabase', config: { url, anonKey } } - Self-hosted Supabase
+   * - { type: 'postgresql', config: { host, database, ... } } - Direct PostgreSQL (Pro/Enterprise)
    */
-  supabase: SupabaseClient;
+  database?: DatabaseConfiguration;
+
+  /**
+   * Supabase client instance from the host application
+   * @deprecated Use `database` prop instead. This is kept for backwards compatibility.
+   */
+  supabase?: SupabaseClient;
 
   /**
    * Current tenant ID for multi-tenant isolation
+   * For Omnipii Cloud, this is derived from the API key and can be omitted.
    */
-  tenantId: string;
+  tenantId?: string;
 
   /**
    * Current user ID for audit logging (optional)

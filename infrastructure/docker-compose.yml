@@ -1,0 +1,139 @@
+# Omnipii Cloud Infrastructure
+# Self-hosted Supabase on Kamatera
+#
+# Prerequisites:
+# - Docker and Docker Compose installed
+# - Domain configured: api.omnipii.com
+# - SSL certificates via Let's Encrypt
+#
+# Usage:
+# 1. Copy .env.example to .env and configure
+# 2. Run: docker compose up -d
+# 3. Run migrations: docker compose exec db psql -U postgres -d postgres -f /migrations/007_omnipii_tenants.sql
+
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: omnipii-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error}
+      POSTGRES_DB: ${POSTGRES_DB:-omnipii}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./migrations:/migrations:ro
+      - ./init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - omnipii-network
+
+  # PostgREST - RESTful API for PostgreSQL
+  rest:
+    image: postgrest/postgrest:v12.0.2
+    container_name: omnipii-rest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-omnipii}
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:?error}
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_MAX_ROWS: 1000
+    ports:
+      - "3000:3000"
+    networks:
+      - omnipii-network
+
+  # GoTrue - Authentication
+  auth:
+    image: supabase/gotrue:v2.143.0
+    container_name: omnipii-auth
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-omnipii}?search_path=auth
+      GOTRUE_SITE_URL: ${SITE_URL:-https://omnipii.com}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:?error}
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP:-true}
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-false}
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-}
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-https://api.omnipii.com}
+    ports:
+      - "9999:9999"
+    networks:
+      - omnipii-network
+
+  # Kong API Gateway (optional, for rate limiting)
+  kong:
+    image: kong:3.4
+    container_name: omnipii-kong
+    restart: unless-stopped
+    depends_on:
+      - rest
+      - auth
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,rate-limiting
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+    volumes:
+      - ./kong.yml:/kong/kong.yml:ro
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+    networks:
+      - omnipii-network
+
+  # Nginx Reverse Proxy with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: omnipii-nginx
+    restart: unless-stopped
+    depends_on:
+      - kong
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./html:/var/www/html:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - omnipii-network
+
+volumes:
+  db_data:
+    driver: local
+
+networks:
+  omnipii-network:
+    driver: bridge

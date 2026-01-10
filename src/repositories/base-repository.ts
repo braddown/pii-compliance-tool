@@ -1,4 +1,5 @@
 import type { SupabaseClient, PostgrestError } from '@supabase/supabase-js';
+import type { DatabaseAdapter, DatabaseAdapterError } from '../database/types';
 
 /**
  * Database error with additional context
@@ -15,6 +16,15 @@ export class DatabaseError extends Error {
   }
 
   static fromPostgrestError(error: PostgrestError): DatabaseError {
+    return new DatabaseError(
+      error.message,
+      error.code,
+      error.details,
+      error.hint
+    );
+  }
+
+  static fromAdapterError(error: DatabaseAdapterError): DatabaseError {
     return new DatabaseError(
       error.message,
       error.code,
@@ -74,13 +84,20 @@ export interface BaseRepositoryConfig {
   tablePrefix?: string;
   /** Optional activity logger for automatic activity tracking */
   activityLogger?: ActivityLogger;
+  /** Optional database adapter (if not using Supabase directly) */
+  adapter?: DatabaseAdapter;
 }
 
 /**
  * Base repository with common functionality for all compliance repositories
+ *
+ * Supports two initialization patterns:
+ * 1. Legacy: Pass SupabaseClient directly (backwards compatible)
+ * 2. Adapter: Pass DatabaseAdapter via config (new pattern)
  */
 export abstract class BaseRepository {
   protected readonly supabase: SupabaseClient;
+  protected readonly adapter?: DatabaseAdapter;
   protected readonly tenantId: string;
   protected readonly tablePrefix: string;
   protected readonly activityLogger?: ActivityLogger;
@@ -91,9 +108,17 @@ export abstract class BaseRepository {
     config: BaseRepositoryConfig = {}
   ) {
     this.supabase = supabase;
+    this.adapter = config.adapter;
     this.tenantId = tenantId;
     this.tablePrefix = config.tablePrefix ?? 'compliance_';
     this.activityLogger = config.activityLogger;
+  }
+
+  /**
+   * Check if using adapter pattern
+   */
+  protected get useAdapter(): boolean {
+    return !!this.adapter;
   }
 
   /**
@@ -121,6 +146,13 @@ export abstract class BaseRepository {
    * Must be called before any query that uses RLS policies
    */
   protected async setTenantContext(): Promise<void> {
+    // Use adapter if available
+    if (this.adapter) {
+      await this.adapter.setTenantContext({ tenantId: this.tenantId });
+      return;
+    }
+
+    // Legacy Supabase client approach
     const { error } = await this.supabase.rpc('set_tenant_context', {
       tenant_id: this.tenantId,
     });
@@ -147,6 +179,19 @@ export abstract class BaseRepository {
    */
   protected handleError(error: PostgrestError, operation: string): never {
     const dbError = DatabaseError.fromPostgrestError(error);
+    console.error(`[${this.constructor.name}] ${operation} failed:`, {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+    });
+    throw dbError;
+  }
+
+  /**
+   * Handle database adapter errors
+   */
+  protected handleAdapterError(error: DatabaseAdapterError, operation: string): never {
+    const dbError = DatabaseError.fromAdapterError(error);
     console.error(`[${this.constructor.name}] ${operation} failed:`, {
       message: error.message,
       code: error.code,

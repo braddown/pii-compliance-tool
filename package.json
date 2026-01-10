@@ -1,8 +1,8 @@
 {
-  "name": "pii-compliance-tool",
+  "name": "omnipii",
   "version": "0.1.0",
-  "description": "GDPR/CCPA/APP compliance toolkit for Next.js applications - PII management, consent tracking, and audit logging",
-  "author": "Your Name",
+  "description": "Omnipii - Privacy compliance toolkit for modern applications. GDPR, CCPA, and APP compliant PII management, consent tracking, and audit logging.",
+  "author": "Omnipii <hello@omnipii.com>",
   "license": "MIT",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -32,6 +32,11 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/types/index.mjs",
       "require": "./dist/types/index.js"
+    },
+    "./database": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     },
     "./migrations/*": "./migrations/*"
   },
@@ -76,6 +81,7 @@
     "typescript": "^5.0.0"
   },
   "keywords": [
+    "omnipii",
     "gdpr",
     "compliance",
     "ccpa",
@@ -87,14 +93,15 @@
     "data-subject-request",
     "nextjs",
     "react",
-    "supabase"
+    "supabase",
+    "database-adapter"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/pii-compliance-tool"
+    "url": "https://github.com/braddown/pii-compliance-tool"
   },
   "bugs": {
-    "url": "https://github.com/your-org/pii-compliance-tool/issues"
+    "url": "https://github.com/braddown/pii-compliance-tool/issues"
   },
-  "homepage": "https://github.com/your-org/pii-compliance-tool#readme"
+  "homepage": "https://omnipii.com"
 }

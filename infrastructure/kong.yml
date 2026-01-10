@@ -1,0 +1,160 @@
+# Kong API Gateway Configuration for Omnipii Cloud
+# Declarative configuration for rate limiting and API key validation
+
+_format_version: "3.0"
+_transform: true
+
+services:
+  # PostgREST service
+  - name: rest-api
+    url: http://rest:3000
+    routes:
+      - name: rest-route
+        paths:
+          - /rest
+        strip_path: true
+        preserve_host: false
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          headers:
+            - Authorization
+            - Content-Type
+            - X-Api-Key
+            - X-Tenant-Id
+          exposed_headers:
+            - X-RateLimit-Limit
+            - X-RateLimit-Remaining
+          credentials: true
+          max_age: 86400
+
+      - name: key-auth
+        config:
+          key_names:
+            - X-Api-Key
+            - apikey
+          key_in_header: true
+          key_in_query: true
+          hide_credentials: false
+
+      - name: rate-limiting
+        config:
+          minute: 60
+          hour: 1000
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - X-Forwarded-Service:rest
+
+  # Auth validation service
+  - name: auth-validate
+    url: http://auth:9999
+    routes:
+      - name: auth-validate-route
+        paths:
+          - /auth/validate
+        methods:
+          - POST
+        strip_path: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 30
+          policy: local
+          fault_tolerant: true
+
+  # Metering service endpoints
+  - name: metering
+    url: http://rest:3000
+    routes:
+      - name: metering-usage
+        paths:
+          - /metering/usage
+        methods:
+          - GET
+          - POST
+        strip_path: false
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - X-Api-Key
+          key_in_header: true
+      - name: rate-limiting
+        config:
+          minute: 120
+          policy: local
+
+  # Query endpoint for database operations
+  - name: query
+    url: http://rest:3000
+    routes:
+      - name: query-route
+        paths:
+          - /query
+        methods:
+          - POST
+        strip_path: true
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - X-Api-Key
+          key_in_header: true
+      - name: rate-limiting
+        config:
+          minute: 300
+          hour: 5000
+          policy: local
+          fault_tolerant: true
+
+  # RPC endpoint for database functions
+  - name: rpc
+    url: http://rest:3000/rpc
+    routes:
+      - name: rpc-route
+        paths:
+          - /rpc
+        strip_path: false
+    plugins:
+      - name: key-auth
+        config:
+          key_names:
+            - X-Api-Key
+          key_in_header: true
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+
+# Consumer definitions (API keys)
+# In production, these would be managed dynamically
+consumers:
+  - username: anonymous
+    keyauth_credentials:
+      - key: ANONYMOUS_KEY_PLACEHOLDER
+
+# Upstreams for load balancing (single instance for now)
+upstreams:
+  - name: rest-upstream
+    targets:
+      - target: rest:3000
+        weight: 100
+  - name: auth-upstream
+    targets:
+      - target: auth:9999
+        weight: 100

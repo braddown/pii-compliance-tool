@@ -1,7 +1,12 @@
-// Main entry point for @conversr/compliance
+// Main entry point for Omnipii
+// Privacy compliance toolkit for modern applications
+// https://omnipii.com
 
 // Types
 export * from './types';
+
+// Database Adapter
+export * from './database';
 
 // Repositories
 export {
