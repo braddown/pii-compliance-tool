@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run example:install:*)",
+      "Bash(timeout 30 npm run dev)",
+      "Bash(npm run dev:example:*)",
+      "Bash(curl:*)",
+      "Bash(npm run dev:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nRename GDPR to Data Subject Request \\(DSR\\) and add PII registry\n\nMajor changes:\n- Rename all GDPR terminology to framework-agnostic DSR naming\n  - GDPRRequest -> DataSubjectRequest\n  - GDPRRequestType -> DSRType\n  - useGDPRRequests -> useDataSubjectRequests\n  - /gdpr-requests -> /data-subject-requests \\(with backwards compat\\)\n- Add backwards compatibility aliases for all renamed types\n- Add ''consent'' as a new DSR request type\n\nNew features:\n- PII Location Registry for tracking where personal data is stored\n- Action Tasks for executing DSR actions against each location\n- Support for automated, semi-automated, and manual action types\n- Public request submission endpoint with email verification\n- Consent tracking fields on PII locations\n\nNew files:\n- src/types/pii-location.ts, action-task.ts, action-config.ts\n- src/repositories/pii-location-repository.ts, action-task-repository.ts\n- src/api/handlers/pii-locations.ts, action-tasks.ts, public-requests.ts\n- src/hooks/usePIILocations.ts, useActionTasks.ts\n- examples/nextjs-app/ - Complete working example application\n- migrations/005_pii_locations_action_tasks.sql\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh auth status:*)",
+      "Bash(gh repo create:*)",
+      "Bash(find:*)",
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(grep \"HTTP/\" echo \"\" echo \"2. Login page \\(/login\\):\" curl -sI http://localhost:3000/login)",
+      "Bash(grep \"HTTP/\" echo \"\" echo \"3. Signup page \\(/signup\\):\" curl -sI http://localhost:3000/signup)",
+      "Bash(grep \"HTTP/\" echo \"\" echo \"4. Dashboard page \\(/dashboard\\):\" curl -sI http://localhost:3000/dashboard)",
+      "Bash(grep \"HTTP/\" echo \"\" echo \"5. Requests page \\(/requests\\):\" curl -sI http://localhost:3000/requests)",
+      "Bash(grep \"HTTP/\" echo \"\" echo \"6. Data Registry page \\(/data-registry\\):\" curl -sI http://localhost:3000/data-registry)",
+      "Bash(supabase --version:*)"
+    ]
+  }
+}
